@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Simulation</title>
+</head>
+<body>
+    <h1>Swap Simulation</h1>
+    <h2>初始池子有42300000个USDC以及14500个ETH，初始币价是1ETH兑换2917USDC</h2>
+    <label for="ethAmount">输入被攻击者兑换的 ETH 数量:</label>
+    <input type="number" id="ethAmount" value="0.1" step="0.01">
+    
+    <label for="slippage">输入滑点百分比 (例如 1 表示 1%):</label>
+    <input type="number" id="slippage" value="1" step="0.1">
+
+    <button onclick="runSimulation()">Calculate</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const x = 42300000 * 10 ** 6;  // 42.3M USDC
+        const y = 14500 * 10 ** 18;    // 14.5K ETH
+
+        function swap(x, y, xinput, yinput) {
+            if (xinput) {
+                return (xinput * y) / (xinput + x);
+            }
+            if (yinput) {
+                return (yinput * x) / (yinput + y);
+            }
+        }
+
+        function runSimulation() {
+            const eth_amount = parseFloat(document.getElementById('ethAmount').value);
+            const slippage_percent = parseFloat(document.getElementById('slippage').value);
+            const slippage = slippage_percent / 100;
+
+            const input_amount = eth_amount * 10 ** 18;
+            const price = swap(x, y, null, 10 ** 18);
+            const target_amount = price * eth_amount * (1 - slippage);
+
+            const a = target_amount;
+            const b = input_amount * target_amount + 2 * y * target_amount;
+            const c = y * input_amount * target_amount + y * y * target_amount - input_amount * x * y;
+
+            const delta_y = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+            const delta_x = delta_y * x / (delta_y + y);
+
+            const attack_need_eth = delta_y;
+            const price2 = swap(x, y, null, attack_need_eth);
+            const pricex = swap(x - price2, y + attack_need_eth, null, input_amount);
+            const price3 = swap(x - price2 - pricex, y + attack_need_eth + input_amount, price2, null);
+
+            const profit = (price3 - delta_y) / 10 ** 18;
+
+            let resultHTML = `
+                <p>原价格: ${(price / 10 ** 6).toFixed(2)} USDC/ETH</p>
+                <p>交易1：攻击者使用 ${(attack_need_eth / 10 ** 18).toFixed(4)} 个以太兑换 ${(price2 / 10 ** 6).toFixed(2)} 个USDC</p>
+                <p>交易2：受害者使用 ${(input_amount / 10 ** 18).toFixed(4)} 个以太兑换 ${(pricex / 10 ** 6).toFixed(2)} 个USDC</p>
+                <p>交易3：攻击者使用 ${(price2 / 10 ** 6).toFixed(2)} 个USDC兑换 ${(price3 / 10 ** 18).toFixed(4)} 个以太</p>
+                <p>获利 ${profit.toFixed(4)} 个以太</p>
+            `;
+
+            if (profit < 0) {
+                resultHTML += `<p style="color: red;">输入的初始兑换滑点太小，受害者不能兑换成功。</p>`;
+            }
+
+            document.getElementById('results').innerHTML = resultHTML;
+        }
+    </script>
+</body>
+</html>
